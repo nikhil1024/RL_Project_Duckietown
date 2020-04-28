@@ -6,7 +6,7 @@ import numpy as np
 
 
 class Environment:
-	def __init__(self, map_name, max_steps=5000):
+	def __init__(self, map_name, max_steps=1000):
 		self.env = None
 		self.map_name = map_name
 		self.max_steps = max_steps
@@ -60,11 +60,11 @@ class DtRewardWrapper(gym.RewardWrapper):
 		super(DtRewardWrapper, self).__init__(env)
 
 	def reward(self, reward):
-		if reward == -1000:
-			reward = -10
-		elif reward > 0:
-			reward += 10
-		else:
-			reward += 4
+		# if reward == -1000:
+		# 	reward = -10
+		# elif reward > 0:
+		# 	reward += 10
+		# else:
+		# 	reward += 4
 
-		return reward
+		return reward / 100

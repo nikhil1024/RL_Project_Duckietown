@@ -92,7 +92,7 @@ def get_screen():
 
 
 def evaluate(env):
-	num_episodes = 100
+	num_episodes = 5
 	episodic_rewards = []
 
 	for episode in range(num_episodes):
@@ -171,7 +171,8 @@ def update():
 def train():
 	num_episodes = 10000
 	epsilon = start_epsilon
-	decay_rate = np.exp(np.log(end_epsilon / start_epsilon) / num_episodes)
+	decay_over_episodes = 100000
+	decay_rate = np.exp(np.log(end_epsilon / start_epsilon) / decay_over_episodes)
 	policy_quality = []
 
 	for i in range(num_episodes):
@@ -187,7 +188,6 @@ def train():
 		action = epsilon_greedy_action(state, epsilon)
 
 		iters = 0
-		done = False
 		episode_rewards = 0
 
 		while True:
@@ -210,7 +210,7 @@ def train():
 			action = torch.tensor([action])
 			done = torch.tensor([done])
 			next_action = epsilon_greedy_action(next_state, epsilon)
-			# print("Size:", state.size(), next_state.size())
+
 			memory.push(state, next_state, action, reward, done)
 
 			update()
@@ -224,13 +224,28 @@ def train():
 			target_net.load_state_dict(policy_net.state_dict())
 
 		epsilon = start_epsilon * (decay_rate ** i)
-		# average_reward = evaluate(env)
-		policy_quality.append(episode_rewards)
+		average_reward = evaluate(env)
+		policy_quality.append(average_reward)
 
-		print("--- Episode {} of {}: Average reward {} ---".format(i + 1, num_episodes, episode_rewards))
+		print("--- Episode {} of {}: Average reward {} ---".format(i + 1, num_episodes, average_reward))
 
-	model_save_path = r"trained_models\DQN\DQN_{}_{}".format(learning_rate, discount)
-	torch.save(policy_net.state_dict(), model_save_path)
+		if (i+1) % 50 == 0:
+			state = {
+				'episode': i+1,
+				'lr': learning_rate,
+				'discount': discount,
+				'state_dict': policy_net.state_dict(),
+				'optimizer': optimizer.state_dict(),
+				'epsilon': epsilon,
+				'policy_quality': policy_quality
+			}
+
+			model_save_path = r"trained_models\DQN\DQN_{}_{}_{}".format(BATCH_SIZE, learning_rate, discount)
+			torch.save(state, model_save_path)
+			print("Model saved at:", model_save_path)
+
+	# model_save_path = r"trained_models\DQN\DQN_{}_{}".format(learning_rate, discount)
+	# torch.save(policy_net.state_dict(), model_save_path)
 
 	plt.plot([x for x in range(num_episodes)], policy_quality)
 	plt.xlabel('Number of episodes')
@@ -246,8 +261,8 @@ if __name__ == '__main__':
 	start_epsilon = 1
 	end_epsilon = 0.05
 	discount = 0.99
-	learning_rate = 0.003
-	BATCH_SIZE = 16
+	learning_rate = 0.0001
+	BATCH_SIZE = 256
 	TARGET_UPDATE = 100
 
 	Transition = namedtuple('Transition', ('state', 'next_state', 'action', 'reward', 'done'))
@@ -262,8 +277,6 @@ if __name__ == '__main__':
 	env = DiscreteWrapper(env)
 	env = DtRewardWrapper(env)
 	env.reset()
-	# for i in range(20):
-	# 	print(env.action(env.action_space.sample()))
 
 	init_screen = get_screen()
 	_, screen_height, screen_width = init_screen.shape
