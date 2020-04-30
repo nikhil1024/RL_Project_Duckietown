@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import gym
 from gym import spaces
 import gym_duckietown
+from skimage.color import rgb2gray
 
 
 
@@ -27,6 +28,13 @@ def seed(seed):
 
 # Code based on:
 # https://github.com/openai/baselines/blob/master/baselines/deepq/replay_buffer.py
+
+class img_stack_class():
+    def __init__(self):
+        self.obs = np.zeros((4,120,160))
+    def add(self,img):
+        self.obs = np.concatenate((self.obs[1:4,:,:],img),axis=0)
+
 
 # Simple replay buffer
 class ReplayBuffer(object):
@@ -73,13 +81,20 @@ class ReplayBuffer(object):
 
 def evaluate_policy(env, policy, eval_episodes=10, max_timesteps=500):
     avg_reward = 0.
+    image_stack = img_stack_class()
     for _ in range(eval_episodes):
-        obs = env.reset()
+        img = env.reset()
+        # print("img shape:{}".format(img.shape))
+        # print("reshapped img shape:{}".format(rgb2gray(img.reshape(120,160,3)).shape))
+        image_stack.add(rgb2gray(img.reshape(120,160,3)).reshape(1,120,160))
+        obs = image_stack.obs
         done = False
         step = 0
         while not done and step < max_timesteps:
             action = policy.predict(np.array(obs))
-            obs, reward, done, _ = env.step(action)
+            img, reward, done, _ = env.step(action)
+            image_stack.add(rgb2gray(img.reshape(120,160,3)).reshape(1,120,160))
+            obs = image_stack.obs
             avg_reward += reward
             step += 1
 
@@ -195,7 +210,7 @@ class ActorCNN(nn.Module):
         self.tanh = nn.Tanh()
         self.sigm = nn.Sigmoid()
 
-        self.conv1 = nn.Conv2d(3, 32, 8, stride=2)
+        self.conv1 = nn.Conv2d(4, 32, 8, stride=2)
         self.conv2 = nn.Conv2d(32, 32, 4, stride=2)
         self.conv3 = nn.Conv2d(32, 32, 4, stride=2)
         self.conv4 = nn.Conv2d(32, 32, 4, stride=1)
@@ -258,7 +273,7 @@ class CriticCNN(nn.Module):
 
         self.lr = nn.LeakyReLU()
 
-        self.conv1 = nn.Conv2d(3, 32, 8, stride=2)
+        self.conv1 = nn.Conv2d(4, 32, 8, stride=2)
         self.conv2 = nn.Conv2d(32, 32, 4, stride=2)
         self.conv3 = nn.Conv2d(32, 32, 4, stride=2)
         self.conv4 = nn.Conv2d(32, 32, 4, stride=1)
@@ -322,7 +337,7 @@ class DDPG(object):
     def predict(self, state):
 
         # just making sure the state has the correct format, otherwise the prediction doesn't work
-        assert state.shape[0] == 3
+        assert state.shape[0] == 4
 
         if self.flat:
             state = torch.FloatTensor(state.reshape(1, -1)).to(device)

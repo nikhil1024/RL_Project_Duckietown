@@ -5,10 +5,11 @@ import logging,sys
 import os
 import numpy as np
 import pandas as pd
+from skimage.color import rgb2gray
 
 
 
-from helper_functions import DDPG,seed,evaluate_policy,ReplayBuffer,launch_env,NormalizeWrapper,ImgWrapper,DtRewardWrapper,ActionWrapper,ResizeWrapper
+from helper_functions_stacked import DDPG,seed,evaluate_policy,ReplayBuffer,launch_env,NormalizeWrapper,ImgWrapper,DtRewardWrapper,ActionWrapper,ResizeWrapper,img_stack_class
 
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ def _train(args):
     # Set seeds
     seed(args.seed)
 
-    state_dim = env.observation_space.shape
+    state_dim = (4,120,160)
     action_dim = env.action_space.shape[0]
     max_action = float(env.action_space.high[0])
 
@@ -58,6 +59,7 @@ def _train(args):
     reward = 0
     episode_timesteps = 0
     log_df = pd.DataFrame(columns=["total_timesteps","episode_num","episode_timesteps","episode_reward"])
+    image_stack = img_stack_class()
     
     print("Starting training")
     while total_timesteps < args.max_timesteps:
@@ -86,7 +88,9 @@ def _train(args):
 
             # Reset environment
             env_counter += 1
-            obs = env.reset()
+            image_stack.add(rgb2gray(env.reset().reshape(120,160,3)).reshape(1,120,160))
+            obs = image_stack.obs
+            print("Initial image shape:{}".format(obs.shape))
             done = False
             episode_reward = 0
             episode_timesteps = 0
@@ -105,7 +109,9 @@ def _train(args):
                           ).clip(env.action_space.low, env.action_space.high)
 
         # Perform action
-        new_obs, reward, done, _ = env.step(action)
+        new_img, reward, done, _ = env.step(action)
+        image_stack.add(rgb2gray(new_img.reshape(120,160,3)).reshape(1,120,160))
+        new_obs = image_stack.obs.copy()
 
         if episode_timesteps >= args.env_timesteps:
             done = True
@@ -114,10 +120,9 @@ def _train(args):
         episode_reward += reward
 
         # Store data in replay buffer
-        replay_buffer.add(obs, new_obs, action, reward, done_bool)
+        replay_buffer.add(obs,new_obs, action, reward, done_bool)
 
         obs = new_obs
-        print("Image shape:{}".format(obs.shape))
 
         episode_timesteps += 1
         total_timesteps += 1
