@@ -6,6 +6,8 @@ import os
 import numpy as np
 import pandas as pd
 from skimage.color import rgb2gray
+from pyvirtualdisplay import Display
+Display(visible=1,backend='xvfb',size=(320, 240)).start()
 
 
 
@@ -23,7 +25,7 @@ def _train(args):
         os.makedirs(args.model_dir)
         
     # Launch the env with our helper function
-    env = launch_env(args.seed)
+    env = launch_env(args.seed,args.map_name)
     print("Initialized environment")
 
     # Wrappers
@@ -63,14 +65,15 @@ def _train(args):
     
     print("Starting training")
     while total_timesteps < args.max_timesteps:
-        
-        print("timestep: {} | reward: {}".format(total_timesteps, reward))
+
+        if(total_timesteps%100==0):
+        	print("timestep: {} | reward: {}".format(total_timesteps, reward))
             
         if done:
             if total_timesteps != 0:
                 print(("Total T: %d Episode Num: %d Episode T: %d Reward: %f") % (
                     total_timesteps, episode_num, episode_timesteps, episode_reward))
-                log_df = log_df.append({"total_timesteps":total_timesteps,"episode_num":episode_num,"episode_timesteps":episode_timesteps,"episode_reward":episode_reward},ignore_index=True)
+                
                 if(total_timesteps>=(saving_steps*5000)):
                 	log_df.to_csv(os.path.join(args.model_dir,"logs.csv"),index=False)
                 	saving_steps+=1
@@ -80,6 +83,7 @@ def _train(args):
                 if timesteps_since_eval >= args.eval_freq:
                     timesteps_since_eval %= args.eval_freq
                     evaluations.append(evaluate_policy(env, policy))
+                    log_df = log_df.append({"total_timesteps":total_timesteps,"episode_num":episode_num,"policy_quality":evaluations[-1]},ignore_index=True)
                     print("rewards at time {}: {}".format(total_timesteps, evaluations[-1]))
 
                     if args.save_models:
@@ -88,6 +92,7 @@ def _train(args):
 
             # Reset environment
             env_counter += 1
+            image_stack.reset()
             image_stack.add(rgb2gray(env.reset().reshape(120,160,3)).reshape(1,120,160))
             obs = image_stack.obs
             print("Initial image shape:{}".format(obs.shape))
@@ -139,7 +144,7 @@ if __name__ == '__main__':
     # DDPG Args
     parser.add_argument("--seed", default=123, type=int)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--start_timesteps", default=1e4, type=int)  # How many time steps purely random policy is run for
-    parser.add_argument("--eval_freq", default=5e3, type=float)  # How often (time steps) we evaluate
+    parser.add_argument("--eval_freq", default=4900, type=float)  # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e6, type=float)  # Max time steps to run environment for
     parser.add_argument("--save_models", action="store_true", default=True)  # Whether or not models are saved
     parser.add_argument("--expl_noise", default=0.1, type=float)  # Std of Gaussian exploration noise
@@ -152,5 +157,6 @@ if __name__ == '__main__':
     parser.add_argument("--env_timesteps", default=500, type=int)  # Frequency of delayed policy updates
     parser.add_argument("--replay_buffer_max_size", default=10000, type=int)  # Maximum number of steps to keep in the replay buffer
     parser.add_argument('--model-dir', type=str, default='D:/more ML/RL_project/models/')
+    parser.add_argument('--map_name', type=str, default='loop_empty')
 
     _train(parser.parse_args())

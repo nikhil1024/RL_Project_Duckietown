@@ -4,6 +4,7 @@ import operator
 import numpy as np
 import random
 import gym
+import pickle
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -34,6 +35,8 @@ class img_stack_class():
         self.obs = np.zeros((4,120,160))
     def add(self,img):
         self.obs = np.concatenate((self.obs[1:4,:,:],img),axis=0)
+    def reset(self):
+        self.obs = np.zeros((4,120,160))
 
 
 # Simple replay buffer
@@ -41,9 +44,17 @@ class ReplayBuffer(object):
     def __init__(self,max_size):
         self.storage = []
         self.max_size = max_size
+        self.c = 0
 
     # Expects tuples of (state, next_state, action, reward, done)
     def add(self, state, next_state, action, reward, done):
+        self.c+=1
+        if(self.c%2000==0):
+            try:
+                pickle.dump(self,open("RB.pkl","wb"))
+                print("Pickle dumped")
+            except Exception as e:
+                print("Could not dump pickle due to :{}".format(e))
         if len(self.storage) < self.max_size:
             self.storage.append((state, next_state, action, reward, done))
         else:
@@ -400,14 +411,14 @@ class DDPG(object):
 
 
 
-def launch_env(seed,id=None):
+def launch_env(seed,map_name="loop_empty",id=None):
     env = None
     if id is None:
         # Launch the environment
         from gym_duckietown.simulator import Simulator
         env = Simulator(
             seed=seed, # random seed
-            map_name="loop_obstacles",
+            map_name=map_name,
             max_steps=500001, # we don't want the gym to reset itself
             domain_rand=0,
             camera_width=640,
