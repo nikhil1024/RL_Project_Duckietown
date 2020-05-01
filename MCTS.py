@@ -155,10 +155,11 @@ class env_wrapper():
         
 
 class Node():
-    def __init__(self,state,parent_action_stack,parent_idx,action,idx):
+    def __init__(self,seed,state,parent_action_stack,parent_idx,action,idx):
+        self.seed = seed
         self.idx = idx
         #self.state = state
-        self.env_object = env_wrapper(parent_action_stack,action)
+        self.env_object = env_wrapper(seed,parent_action_stack,action)
         self.is_leaf=True
         self.is_terminal = False
         
@@ -174,7 +175,7 @@ class Node():
         env = self.env_object.get_env()
         curr_state, reward, done, _ = env.step(action)
         
-        node_dict[new_idx] = Node(curr_state,self.env_object.action_stack,self.idx,action,new_idx)
+        node_dict[new_idx] = Node(self.seed,curr_state,self.env_object.action_stack,self.idx,action,new_idx)
         self.child_idx.append(new_idx)
         
     def rollout(self):
@@ -204,7 +205,7 @@ class MCTS():
     
     def __init__(self,seed):
         env = env_wrapper(seed).get_env()
-        self.root_node = Node(env.reset(),None,None,None,0)
+        self.root_node = Node(seed,env.reset(),None,None,None,0)
         self.node_dict = dict()
         self.node_dict[0] =self.root_node
         
@@ -231,7 +232,9 @@ class MCTS():
     def expansion(self,node_idx):
         current_node = self.node_dict[node_idx]
         current_node.visited+=1
-        for action in range(0,3):
+        unique_actions = np.arange(0,3)
+        np.random.shuffle(unique_actions)
+        for action in unique_actions:
             current_node.add_node(action,self.node_dict)
         return
     
@@ -272,7 +275,7 @@ def print_nodes_summary(node_dict):
     print("NODES_SUMMARY:")
     for node_idx in list(node_dict.keys()):
         node = node_dict[node_idx]
-        print("Node idx:{},Node visited count:{},Node UCT:{},Node parents:{},Node children:{}".format(node_idx,node.visited,node.UCT,node.parent_idx,node.child_idx))
+        print("Node idx:{},visited count:{},UCT:{},parent:{},children:{},is_terminal:{}".format(node_idx,node.visited,node.UCT,node.parent_idx,node.child_idx,node.is_terminal))
 
 def get_path_reward(path,seed):
     env = env_wrapper(seed).get_env()
@@ -289,8 +292,8 @@ def build_mcts(args):
     current_idx = 0
     current_node = mcts.node_dict[current_idx]
     itr = 0
-    while (mcts.node_dict[0].is_terminal==False):
-        if((current_node.is_leaf==True)&itr<args.max_iterations):
+    while ((mcts.node_dict[0].is_terminal==False)&(itr<args.max_iterations)):
+        if(current_node.is_leaf==True):
             current_best_path = current_node.env_object.action_stack
             if(current_node.visited==0):
                 mcts.backpropagate(current_idx,current_node.rollout())
@@ -299,16 +302,20 @@ def build_mcts(args):
                 mcts.expansion(current_idx)
                 #next_idx = mcts.node_dict[current_idx].child_idx[0]     
             next_idx = 0
+            itr+=1
         else:
             next_idx = mcts.get_best_child(current_idx)
         current_idx = next_idx    
         current_node = mcts.node_dict[current_idx]
         if((itr%args.view_freq==0)&(itr>0)):
-            print("******ITERATION:{}******".format(iter))
+            print("******ITERATION:{}******".format(itr))
             print_nodes_summary(mcts.node_dict)
             print("current_best_path:{}".format(current_best_path))
-            path_reward = get_path_reward(current_best_path)
+            path_reward = get_path_reward(current_best_path,args.seed)
             print("Current path reward:{}".format(path_reward))
+        itr+=1
+    print("Ending loop")
+    return
             
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
