@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logging.disable(sys.maxsize)
 
+#Code partially based  on
+#https://github.com/duckietown/gym-duckietown/tree/master/learning/reinforcement/pytorch
+
 def _train(args):   
     if not os.path.exists("./results"):
         os.makedirs("./results")
@@ -22,7 +25,7 @@ def _train(args):
         os.makedirs(args.model_dir)
         
     # Launch the env with our helper function
-    env = launch_env(args.seed)
+    env = launch_env(args.seed,args.map_name)
     print("Initialized environment")
 
     # Wrappers
@@ -62,7 +65,8 @@ def _train(args):
     print("Starting training")
     while total_timesteps < args.max_timesteps:
         
-        print("timestep: {} | reward: {}".format(total_timesteps, reward))
+        if(total_timesteps%100==0):
+            print("timestep: {} | reward: {}".format(total_timesteps, reward))
             
         if done:
             if total_timesteps != 0:
@@ -117,7 +121,7 @@ def _train(args):
         replay_buffer.add(obs, new_obs, action, reward, done_bool)
 
         obs = new_obs
-        print("Image shape:{}".format(obs.shape))
+        # print("Image shape:{}".format(obs.shape))
 
         episode_timesteps += 1
         total_timesteps += 1
@@ -147,5 +151,6 @@ if __name__ == '__main__':
     parser.add_argument("--env_timesteps", default=500, type=int)  # Frequency of delayed policy updates
     parser.add_argument("--replay_buffer_max_size", default=10000, type=int)  # Maximum number of steps to keep in the replay buffer
     parser.add_argument('--model-dir', type=str, default='D:/more ML/RL_project/models/')
+    parser.add_argument('--map_name', type=str, default='loop_empty')
 
     _train(parser.parse_args())

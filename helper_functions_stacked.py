@@ -13,7 +13,8 @@ from gym import spaces
 import gym_duckietown
 from skimage.color import rgb2gray
 
-
+#Code partially based  on
+#https://github.com/duckietown/gym-duckietown/tree/master/learning/reinforcement/pytorch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.backends.cudnn.deterministic = True

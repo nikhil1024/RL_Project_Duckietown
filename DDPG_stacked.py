@@ -6,13 +6,13 @@ import os
 import numpy as np
 import pandas as pd
 from skimage.color import rgb2gray
-from pyvirtualdisplay import Display
-Display(visible=1,backend='xvfb',size=(320, 240)).start()
 
 
 
 from helper_functions_stacked import DDPG,seed,evaluate_policy,ReplayBuffer,launch_env,NormalizeWrapper,ImgWrapper,DtRewardWrapper,ActionWrapper,ResizeWrapper,img_stack_class
 
+#Code partially based  on
+#https://github.com/duckietown/gym-duckietown/tree/master/learning/reinforcement/pytorch
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -52,7 +52,6 @@ def _train(args):
     evaluations= [evaluate_policy(env, policy)]
    
     total_timesteps = 0
-    saving_steps = 1
     timesteps_since_eval = 0
     episode_num = 0
     done = True
@@ -60,7 +59,7 @@ def _train(args):
     env_counter = 0
     reward = 0
     episode_timesteps = 0
-    log_df = pd.DataFrame(columns=["total_timesteps","episode_num","episode_timesteps","episode_reward"])
+    log_df = pd.DataFrame(columns=["total_timesteps","episode_num","policy_quality"])
     image_stack = img_stack_class()
     
     print("Starting training")
@@ -74,9 +73,6 @@ def _train(args):
                 print(("Total T: %d Episode Num: %d Episode T: %d Reward: %f") % (
                     total_timesteps, episode_num, episode_timesteps, episode_reward))
                 
-                if(total_timesteps>=(saving_steps*5000)):
-                	log_df.to_csv(os.path.join(args.model_dir,"logs.csv"),index=False)
-                	saving_steps+=1
                 policy.train(replay_buffer, episode_timesteps, args.batch_size, args.discount, args.tau)
 
                 # Evaluate episode
@@ -88,6 +84,7 @@ def _train(args):
 
                     if args.save_models:
                         policy.save(filename='ddpg', directory=args.model_dir)
+                        log_df.to_csv(os.path.join(args.model_dir,"logs.csv"),index=False)
                     np.savez("./results/rewards.npz",evaluations)
 
             # Reset environment
@@ -144,7 +141,7 @@ if __name__ == '__main__':
     # DDPG Args
     parser.add_argument("--seed", default=123, type=int)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--start_timesteps", default=1e4, type=int)  # How many time steps purely random policy is run for
-    parser.add_argument("--eval_freq", default=4900, type=float)  # How often (time steps) we evaluate
+    parser.add_argument("--eval_freq", default=1000, type=float)  # How often (time steps) we evaluate
     parser.add_argument("--max_timesteps", default=1e6, type=float)  # Max time steps to run environment for
     parser.add_argument("--save_models", action="store_true", default=True)  # Whether or not models are saved
     parser.add_argument("--expl_noise", default=0.1, type=float)  # Std of Gaussian exploration noise

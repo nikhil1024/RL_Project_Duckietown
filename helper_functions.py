@@ -10,6 +10,8 @@ import torch.nn.functional as F
 import gym
 from gym import spaces
 import gym_duckietown
+from gym_duckietown.simulator import Simulator
+import pickle
 
 
 
@@ -17,7 +19,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-
+#Code partially based  on
+#https://github.com/duckietown/gym-duckietown/tree/master/learning/reinforcement/pytorch
 
 def seed(seed):
     torch.manual_seed(seed)
@@ -33,16 +36,27 @@ class ReplayBuffer(object):
     def __init__(self,max_size):
         self.storage = []
         self.max_size = max_size
+        self.c = 0
 
     # Expects tuples of (state, next_state, action, reward, done)
     def add(self, state, next_state, action, reward, done):
+        self.c+=1
+        if(self.c%2000==0):
+            self.save()
         if len(self.storage) < self.max_size:
             self.storage.append((state, next_state, action, reward, done))
         else:
             # Remove random element in the memory beforea adding a new one
+            # pickle.dump()
             self.storage.pop(random.randrange(len(self.storage)))
             self.storage.append((state, next_state, action, reward, done))
-
+    
+    def save(self):
+         try:
+            pickle.dump(self,open("RB.pkl","wb"))
+            print("Pickle dumped")
+         except Exception as e:
+            print("Could not dump pickle due to :{}".format(e))
 
     def sample(self, batch_size=100, flat=True):
         ind = np.random.randint(0, len(self.storage), size=batch_size)
@@ -147,6 +161,31 @@ class DtRewardWrapper(gym.RewardWrapper):
 
         return reward
 
+class DiscreteWrapper(gym.ActionWrapper):
+	"""
+	Duckietown environment with discrete actions (left, right, forward)
+	instead of continuous control
+	"""
+
+	def __init__(self, env):
+		gym.ActionWrapper.__init__(self, env)
+		self.action_space = spaces.Discrete(3)
+
+	def action(self, action):
+		# Turn left
+		if action == 0:
+			vels = [0.6, +1.0]
+		# Turn right
+		elif action == 1:
+			vels = [0.6, -1.0]
+		# Go forward
+		elif action == 2:
+			vels = [0.7, 0.0]
+		else:
+			assert False, "unknown action"
+
+		return np.array(vels)
+
 
 # Deprecated
 class ActionWrapper(gym.ActionWrapper):
@@ -217,7 +256,7 @@ class ActorCNN(nn.Module):
         x = self.bn2(self.lr(self.conv2(x)))
         x = self.bn3(self.lr(self.conv3(x)))
         x = self.bn4(self.lr(self.conv4(x)))
-        x = x.view(x.size(0), -1)  # flatten
+        x = x.reshape(x.size(0), -1)  # flatten
         x = self.dropout(x)
         x = self.lr(self.lin1(x))
 
@@ -279,7 +318,7 @@ class CriticCNN(nn.Module):
         x = self.bn2(self.lr(self.conv2(x)))
         x = self.bn3(self.lr(self.conv3(x)))
         x = self.bn4(self.lr(self.conv4(x)))
-        x = x.view(x.size(0), -1)  # flatten
+        x = x.reshape(x.size(0), -1)  # flatten
         x = self.lr(self.lin1(x))
         x = self.lr(self.lin2(torch.cat([x, actions], 1)))  # c
         x = self.lin3(x)
@@ -337,6 +376,7 @@ class DDPG(object):
             # Sample replay buffer
             sample = replay_buffer.sample(batch_size, flat=self.flat)
             state = torch.FloatTensor(sample["state"]).to(device)
+            #print("State shape:{}".format(state.shape))
             action = torch.FloatTensor(sample["action"]).to(device)
             next_state = torch.FloatTensor(sample["next_state"]).to(device)
             done = torch.FloatTensor(1 - sample["done"]).to(device)
@@ -385,14 +425,14 @@ class DDPG(object):
 
 
 
-def launch_env(seed,id=None):
+def launch_env(seed,map_name="loop_empty",id=None):
     env = None
     if id is None:
         # Launch the environment
         from gym_duckietown.simulator import Simulator
         env = Simulator(
             seed=seed, # random seed
-            map_name="loop_obstacles",
+            map_name=map_name,
             max_steps=500001, # we don't want the gym to reset itself
             domain_rand=0,
             camera_width=640,

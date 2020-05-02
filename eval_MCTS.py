@@ -19,6 +19,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 logging.disable(sys.maxsize)
+#partiall based on 
 
 def launch_env(seed,map_name="loop_empty",id=None):
     env = None

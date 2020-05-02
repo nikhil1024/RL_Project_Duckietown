@@ -12,6 +12,9 @@ warnings.filterwarnings("ignore")
 logging.disable(sys.maxsize)
 #x = os.system("export PYGLET_DEBUG_GL=True")
 
+#Code partially based  on
+#https://github.com/duckietown/gym-duckietown/tree/master/learning/reinforcement/pytorch
+
 def launch_env(seed,map_name="loop_empty",id=None):
     env = None
     if id is None:
