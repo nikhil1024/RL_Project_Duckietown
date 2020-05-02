@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import random
 import gym
 import argparse
@@ -131,8 +132,9 @@ def seed_lib(seed):
 
 
 class env_wrapper():
-    def __init__(self,seed,parent_action_stack=None,action=None):
+    def __init__(self,seed,map_name="loop_empty",parent_action_stack=None,action=None):
         self.seed = seed
+        self.map_name = map_name
         if(parent_action_stack==None):
             self.action_stack = []
         else:
@@ -141,7 +143,7 @@ class env_wrapper():
             self.action_stack.append(action)
         
     def get_env(self):
-        env = launch_env(seed=self.seed)
+        env = launch_env(seed=self.seed,map_name=self.map_name)
         env = ResizeWrapper(env)
         env = NormalizeWrapper(env)
         env = ImgWrapper(env) # to make the images from 160x120x3 into 3x160x120
@@ -155,11 +157,12 @@ class env_wrapper():
         
 
 class Node():
-    def __init__(self,seed,state,parent_action_stack,parent_idx,action,idx):
+    def __init__(self,seed,map_name,state,parent_action_stack,parent_idx,action,idx):
         self.seed = seed
+        self.map_name = map_name
         self.idx = idx
         #self.state = state
-        self.env_object = env_wrapper(seed,parent_action_stack,action)
+        self.env_object = env_wrapper(seed,map_name,parent_action_stack,action)
         self.is_leaf=True
         self.is_terminal = False
         
@@ -175,11 +178,11 @@ class Node():
         env = self.env_object.get_env()
         curr_state, reward, done, _ = env.step(action)
         
-        node_dict[new_idx] = Node(self.seed,curr_state,self.env_object.action_stack,self.idx,action,new_idx)
+        node_dict[new_idx] = Node(self.seed,self.map_name,curr_state,self.env_object.action_stack,self.idx,action,new_idx)
         self.child_idx.append(new_idx)
         
     def rollout(self):
-        print("Executing rollout for node idx:{}".format(self.idx))
+        #print("Executing rollout for node idx:{}".format(self.idx))
         done = False
         env = self.env_object.get_env()
         action = np.random.choice(range(0,3),replace=True)
@@ -203,16 +206,16 @@ class Node():
         
 class MCTS():
     
-    def __init__(self,seed):
+    def __init__(self,seed,map_name):
         env = env_wrapper(seed).get_env()
-        self.root_node = Node(seed,env.reset(),None,None,None,0)
+        self.root_node = Node(seed,map_name,env.reset(),None,None,None,0)
         self.node_dict = dict()
         self.node_dict[0] =self.root_node
         
     def get_best_child(self,node_idx):
         current_child = self.node_dict[node_idx]
         current_child.visited+=1
-        UCTs = np.array([self.node_dict[child_idx].UCT for child_idx in current_child.child_idx])
+        UCTs = np.array([self.node_dict[child_idx].UCT for child_idx in current_child.child_idx ])
         return(current_child.child_idx[np.argmax(UCTs)])
         
             
@@ -242,7 +245,7 @@ class MCTS():
         return(self.node_dict[node_idx].rollout())
     
     def backpropagate(self,node_idx,rollout_reward):
-        print("Executing backpropagation from node:{}".format(node_idx))
+        #print("Executing backpropagation from node:{}".format(node_idx))
         node = self.node_dict[node_idx]
         node.UCT = rollout_reward
         node.visited+=1
@@ -252,11 +255,11 @@ class MCTS():
         
         
     def update_node(self,node_idx):
-        print("..updating node:{}".format(node_idx))
+        #print("..updating node:{}".format(node_idx))
         node = self.node_dict[node_idx]
 
         children_idx = [child_idx for child_idx in node.child_idx if (self.node_dict[child_idx].visited>0)]
-        print("...active children:{}".format(children_idx))
+        #print("...active children:{}".format(children_idx))
         average_reward = np.average([self.node_dict[child_idx].UCT for child_idx in children_idx])
         
         if(node.parent_idx!=None):
@@ -277,8 +280,8 @@ def print_nodes_summary(node_dict):
         node = node_dict[node_idx]
         print("Node idx:{},visited count:{},UCT:{},parent:{},children:{},is_terminal:{}".format(node_idx,node.visited,node.UCT,node.parent_idx,node.child_idx,node.is_terminal))
 
-def get_path_reward(path,seed):
-    env = env_wrapper(seed).get_env()
+def get_path_reward(path,seed,map_name):
+    env = env_wrapper(seed,map_name).get_env()
     path_reward = 0
     for action in path:
         _,reward,_,_ = env.step(action)
@@ -288,11 +291,15 @@ def get_path_reward(path,seed):
     
 def build_mcts(args):
     seed_lib(args.seed)
-    mcts = MCTS(seed=args.seed)
+    mcts = MCTS(seed=args.seed,map_name=args.map_name)
     current_idx = 0
     current_node = mcts.node_dict[current_idx]
     itr = 0
+    log_df = pd.DataFrame(columns=["iteration","current_reward"])
     while ((mcts.node_dict[0].is_terminal==False)&(itr<args.max_iterations)):
+        if(current_node.is_terminal==True):
+            print("Absolute terminality reached")
+            itr = args.max_iterations
         if(current_node.is_leaf==True):
             current_best_path = current_node.env_object.action_stack
             if(current_node.visited==0):
@@ -303,17 +310,20 @@ def build_mcts(args):
                 #next_idx = mcts.node_dict[current_idx].child_idx[0]     
             next_idx = 0
             itr+=1
+            if((itr%args.view_freq==0)&(itr>0)):
+                print("******ITERATION:{}******".format(itr))
+                print_nodes_summary(mcts.node_dict)
+                print("current_best_path:{}".format(current_best_path))
+                path_reward = get_path_reward(current_best_path,args.seed,args.map_name)
+                print("Current path reward:{}".format(path_reward))
+                current_best_path = np.array(current_best_path)
+#                np.save("{}_best_path.npy".format(args.map_name),current_best_path)
+#                log_df = log_df.append({"iterations":itr,"current_reward":path_reward},ignore_index=True)
+#                log_df.to_csv("{}_logs.csv".format(args.map_name),index=False)
         else:
             next_idx = mcts.get_best_child(current_idx)
         current_idx = next_idx    
         current_node = mcts.node_dict[current_idx]
-        if((itr%args.view_freq==0)&(itr>0)):
-            print("******ITERATION:{}******".format(itr))
-            print_nodes_summary(mcts.node_dict)
-            print("current_best_path:{}".format(current_best_path))
-            path_reward = get_path_reward(current_best_path,args.seed)
-            print("Current path reward:{}".format(path_reward))
-        itr+=1
     print("Ending loop")
     return
             
@@ -322,6 +332,7 @@ if __name__ == '__main__':
     
     # DDPG Args
     parser.add_argument("--seed", default=123, type=int)  # Sets Gym, PyTorch and Numpy seeds
+    parser.add_argument("--map_name", default="loop_empty", type=str)  # Sets Gym, PyTorch and Numpy seeds
     parser.add_argument("--max_iterations", default=5000, type=int)  # How many maximum iterations to run the tree for
     parser.add_argument("--view_freq", default=5, type=float)  # How often (time steps) we evaluate
     
