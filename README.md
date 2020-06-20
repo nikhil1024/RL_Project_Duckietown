@@ -11,10 +11,10 @@ Discrete control only allowed for three different movements: go left, go straigh
 
 We achieved decent results for all 3 algorithms, achieving a moving average reward well over 1000 in all 3 algorithms allowing just 250 time steps per episode.
 
-DQN inherently suffers from a lot of drawbacks such as high gradient variance, and also only being restricted to a discrete action space may not be ideal for a self-driving car.
+**DQN** inherently suffers from a lot of drawbacks such as high gradient variance, and also only being restricted to a discrete action space may not be ideal for a self-driving car.
 
-DDPG improves over its drawbacks by introducing an actor-critic like architecture. DDPG can also take advantage of a continuous action space. Thus, it is no surprise that it performs much better than DQN.
+**DDPG** improves over its drawbacks by introducing an actor-critic like architecture. DDPG can also take advantage of a continuous action space. Thus, it is no surprise that it performs much better than DQN.
 
-MCTS, which is also restricted to a discrete action space, does not suffer from other drawbacks of DQN and is able to achieve comparable results to DDPG just because of the sheer power of the algorithm. MCTS takes advantage of a tree search, which we combine with a random Rollout strategy and is able to search some crucial parts of the search space leading to a quite impressive performance.
+**MCTS**, which is also restricted to a discrete action space, does not suffer from other drawbacks of DQN and is able to achieve comparable results to DDPG just because of the sheer power of the algorithm. MCTS takes advantage of a tree search, which we combine with a random Rollout strategy and is able to search some crucial parts of the search space leading to a quite impressive performance.
 
 In conclusion, we found that MCTS ~ DDPG >>> DQN for a self-driving agent in the Duckietown environment.
